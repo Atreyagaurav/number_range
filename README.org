@@ -1,0 +1,4 @@
+* Introduction
+This is a simple library that converts the numbers range in human readable string to numeric type. For example: =1-2= to =[1,2]= or =1,3-5= to =[1,3,4,5]=.
+
+I'm mostly doing this to learn generics and learn about packages and such.
