@@ -1,17 +1,37 @@
-pub fn number_range(rng_str: &str) -> Vec<usize> {
-    rng_str
+use num;
+
+pub fn number_range<T: num::Integer + num::Unsigned + std::str::FromStr + std::ops::Add + Copy>(
+    rng_str: &str,
+) -> Result<Vec<T>, String> {
+    let rng = rng_str
         .split(',')
-        .map(|r| {
+        .map(|r| -> Result<Vec<T>, String> {
             let mut spl = r.split('-');
-            let start: usize = spl.next().unwrap().parse().unwrap();
+            let start: T = spl
+                .next()
+                .unwrap()
+                .parse::<T>()
+                .map_err(|_| "Not an Unsigned Integer".to_string())?;
             if let Some(end) = spl.next() {
-                (start..=end.parse().unwrap()).collect()
+                let end: T = end
+                    .parse::<T>()
+                    .map_err(|_| "Not an Unsigned Integer".to_string())?;
+                let mut range: Vec<T> = Vec::new();
+                let mut i: T = start;
+                while i <= end {
+                    range.push(i);
+                    i = i + num::One::one();
+                }
+                Ok(range)
             } else {
-                vec![start]
+                Ok(vec![start])
             }
         })
+        .collect::<Result<Vec<Vec<T>>, String>>()?
+        .into_iter()
         .flatten()
-        .collect()
+        .collect();
+    Ok(rng)
 }
 
 pub fn sequence(seq_str: &str) -> Vec<usize> {
@@ -46,21 +66,27 @@ mod tests {
 
     #[test]
     fn comma_check() {
-        assert_eq!(number_range("3,5"), vec![3, 5]);
-        assert_eq!(number_range("0,90"), vec![0, 90]);
-        assert_eq!(number_range("12,12,3"), vec![12, 12, 3]);
+        assert_eq!(number_range::<usize>("3,5"), Ok(vec![3, 5]));
+        assert_eq!(number_range::<usize>("0,90"), Ok(vec![0, 90]));
+        assert_eq!(number_range::<usize>("12,12,3"), Ok(vec![12, 12, 3]));
     }
 
     #[test]
     fn range_check() {
-        assert_eq!(number_range("1-3"), vec![1, 2, 3]);
-        assert_eq!(number_range("1-10"), vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+        assert_eq!(number_range::<usize>("1-3"), Ok(vec![1, 2, 3]));
+        assert_eq!(
+            number_range::<usize>("1-10"),
+            Ok(vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+        );
     }
 
     #[test]
     fn comma_and_range_check() {
-        assert_eq!(number_range("1-3,5"), vec![1, 2, 3, 5]);
-        assert_eq!(number_range("3,5-10"), vec![3, 5, 6, 7, 8, 9, 10]);
+        assert_eq!(number_range::<usize>("1-3,5"), Ok(vec![1, 2, 3, 5]));
+        assert_eq!(
+            number_range::<usize>("3,5-10"),
+            Ok(vec![3, 5, 6, 7, 8, 9, 10])
+        );
     }
 
     #[test]
