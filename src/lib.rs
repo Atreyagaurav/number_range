@@ -7,6 +7,22 @@ enum Number<T> {
 }
 
 /// Options for the NumberRange
+///
+/// For example, if you're dealing with unsigned numbers then you can
+/// use `-` as a range separator to parse ranges from many sources.
+///
+/// ```rust
+/// # use std::error::Error;
+/// # use number_range::NumberRangeOptions;
+/// #
+/// # fn main() -> Result<(), Box<dyn Error>> {
+/// NumberRangeOptions::new()
+///              .with_list_sep(',')
+///              .with_range_sep('-')
+///              .parse::<usize>("1,3-10,14")?;
+/// #     Ok(())
+/// # }
+/// ```
 #[derive(Debug)]
 pub struct NumberRangeOptions {
     pub list_sep: char,
@@ -78,13 +94,13 @@ impl NumberRangeOptions {
     }
 
     /// Change the list separator character (default `,`)
-    pub fn with_list_sep(&mut self, sep: char) -> &Self {
+    pub fn with_list_sep(&mut self, sep: char) -> &mut Self {
         self.list_sep = sep;
         self
     }
 
     /// Change the range separator character (default `:`)
-    pub fn with_range_sep(&mut self, sep: char) -> &Self {
+    pub fn with_range_sep(&mut self, sep: char) -> &mut Self {
         self.range_sep = sep;
         self
     }
