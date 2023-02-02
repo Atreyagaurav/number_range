@@ -6,17 +6,25 @@ enum Number<T> {
     Range(T, T, T),
 }
 
+/// Options for the NumberRange
 #[derive(Debug)]
 pub struct NumberRangeOptions {
-    list_sep: char,
-    range_sep: char,
+    pub list_sep: char,
+    pub range_sep: char,
 }
 
+/// NumberRange struct, once you've parsed the string you can iterate though it.
 #[derive(Debug)]
 pub struct NumberRange<'a, T> {
     numbers: VecDeque<Number<T>>,
     repr: Option<&'a str>,
     options: &'a NumberRangeOptions,
+}
+
+impl<'a, T> std::fmt::Display for NumberRange<'a, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.repr.unwrap_or_default())
+    }
 }
 
 impl<'a, T: Copy + std::ops::Add<Output = T> + std::cmp::PartialOrd> Iterator
@@ -53,6 +61,7 @@ impl Default for NumberRangeOptions {
 }
 
 impl NumberRangeOptions {
+    /// New struct with default options
     pub fn new() -> Self {
         Self {
             list_sep: ',',
@@ -60,6 +69,7 @@ impl NumberRangeOptions {
         }
     }
 
+    /// Globally default Option to pass around
     pub fn global_default() -> &'static Self {
         &Self {
             list_sep: ',',
@@ -67,22 +77,26 @@ impl NumberRangeOptions {
         }
     }
 
+    /// Change the list separator character (default `,`)
     pub fn with_list_sep(&mut self, sep: char) -> &Self {
         self.list_sep = sep;
         self
     }
 
+    /// Change the range separator character (default `:`)
     pub fn with_range_sep(&mut self, sep: char) -> &Self {
         self.range_sep = sep;
         self
     }
 
+    /// Same as NumberRange::parse_str(), Makes a NumberRange and parses
+    /// the string.
     pub fn parse<'a, T: std::str::FromStr + num::One + Copy>(
         &'a self,
         numstr: &'a str,
     ) -> Result<NumberRange<T>, String> {
         let nr = NumberRange::with_options(self);
-        nr.parse(numstr)
+        nr.parse_str(numstr)
     }
 }
 
@@ -97,6 +111,7 @@ impl<'a, T> Default for NumberRange<'a, T> {
 }
 
 impl<'a, T: std::str::FromStr + num::One + Copy> NumberRange<'a, T> {
+    /// New NumberRange struct with NumberRangeOptions.
     pub fn with_options(options: &'a NumberRangeOptions) -> Self {
         Self {
             numbers: VecDeque::new(),
@@ -105,53 +120,75 @@ impl<'a, T: std::str::FromStr + num::One + Copy> NumberRange<'a, T> {
         }
     }
 
-    pub fn parse(mut self, numstr: &'a str) -> Result<Self, String> {
-        let numbers: VecDeque<Number<T>> = numstr
-            .split(self.options.list_sep)
-            .map(|seq_str| -> Result<Number<T>, String> {
-                match seq_str.matches(self.options.range_sep).count() {
-                    0 => seq_str
-                        .trim()
-                        .parse::<T>()
-                        .map_err(|_| "Not an Integer".to_string())
-                        .map(|v| Number::Single(v)),
-                    1 => match seq_str.split_once(self.options.range_sep) {
-                        Some((start, end)) => {
-                            let start = start
-                                .trim()
-                                .parse::<T>()
-                                .map_err(|_| "Not an Integer".to_string())?;
-                            let end = end
-                                .trim()
-                                .parse::<T>()
-                                .map_err(|_| "Not an Integer".to_string())?;
-                            Ok(Number::Range(start, num::One::one(), end))
-                        }
-                        None => panic!(
-                            "Checked there is single range_separator, yet split to 2 failed."
-                        ),
-                    },
-                    2 => {
-                        let nums: Vec<T> = seq_str
-                            .splitn(3, self.options.range_sep)
-                            .map(|s| -> Result<T, String> {
-                                s.trim()
-                                    .parse::<T>()
-                                    .map_err(|_| "Not an Integer".to_string())
-                            })
-                            .collect::<Result<Vec<T>, String>>()?;
-                        Ok(Number::Range(nums[0], nums[1], nums[2]))
-                    }
-                    _ => Err(format!(
-                        "Too many range separators ({}) on {}",
-                        self.options.range_sep, seq_str
-                    )),
-                }
-            })
-            .collect::<Result<VecDeque<Number<T>>, String>>()?;
-        self.numbers = numbers;
+    /// Parse the human readable string (`numstr`).
+    ///
+    /// Once parsed the NumberRange struct can be used as an
+    /// Iterator. Use `.collect::<T>()` to convert it into a vector.
+    ///
+    /// ```rust
+    /// # use std::error::Error;
+    /// # use number_range::NumberRange;
+    /// #
+    /// # fn main() -> Result<(), Box<dyn Error>> {
+    /// NumberRange::<i64>::default().parse_str("1,3,5:10")?;
+    /// #     Ok(())
+    /// # }
+    /// ```
+    pub fn parse_str(mut self, numstr: &'a str) -> Result<Self, String> {
         self.repr = Some(numstr);
-        Ok(self)
+        self.parse()
+    }
+    pub fn parse(mut self) -> Result<Self, String> {
+        if let Some(numstr) = self.repr {
+            let numbers: VecDeque<Number<T>> = numstr
+                .split(self.options.list_sep)
+                .map(|seq_str| -> Result<Number<T>, String> {
+                    match seq_str.matches(self.options.range_sep).count() {
+                        0 => seq_str
+                            .trim()
+                            .parse::<T>()
+                            .map_err(|_| "Not an Integer".to_string())
+                            .map(|v| Number::Single(v)),
+                        1 => match seq_str.split_once(self.options.range_sep) {
+                            Some((start, end)) => {
+                                let start = start
+                                    .trim()
+                                    .parse::<T>()
+                                    .map_err(|_| "Not an Integer".to_string())?;
+                                let end = end
+                                    .trim()
+                                    .parse::<T>()
+                                    .map_err(|_| "Not an Integer".to_string())?;
+                                Ok(Number::Range(start, num::One::one(), end))
+                            }
+                            None => panic!(
+                                "Checked there is single range_separator, yet split to 2 failed."
+                            ),
+                        },
+                        2 => {
+                            let nums: Vec<T> = seq_str
+                                .splitn(3, self.options.range_sep)
+                                .map(|s| -> Result<T, String> {
+                                    s.trim()
+                                        .parse::<T>()
+                                        .map_err(|_| "Not an Integer".to_string())
+                                })
+                                .collect::<Result<Vec<T>, String>>()?;
+                            Ok(Number::Range(nums[0], nums[1], nums[2]))
+                        }
+                        _ => Err(format!(
+                            "Too many range separators ({}) on {}",
+                            self.options.range_sep, seq_str
+                        )),
+                    }
+                })
+                .collect::<Result<VecDeque<Number<T>>, String>>()?;
+            self.numbers = numbers;
+            self.repr = Some(numstr);
+            Ok(self)
+        } else {
+            Err("Nothing to Parse".to_string())
+        }
     }
 }
 
@@ -175,7 +212,7 @@ mod tests {
     fn comma_default_int(#[case] numstr: &str, #[case] numvec: Vec<i64>) {
         assert_eq!(
             NumberRange::<i64>::default()
-                .parse(numstr)
+                .parse_str(numstr)
                 .unwrap()
                 .collect::<Vec<i64>>(),
             numvec
@@ -200,7 +237,7 @@ mod tests {
     fn default_usize(#[case] numstr: &str, #[case] numvec: Vec<usize>) {
         assert_eq!(
             NumberRange::<usize>::default()
-                .parse(numstr)
+                .parse_str(numstr)
                 .unwrap()
                 .collect::<Vec<usize>>(),
             numvec
