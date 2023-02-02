@@ -16,6 +16,24 @@ enum Number<T> {
 /// # use number_range::NumberRangeOptions;
 /// #
 /// # fn main() -> Result<(), Box<dyn Error>> {
+///     let rng: Vec<usize> = NumberRangeOptions::default()
+///         .with_range_sep('-')
+///         .parse("1,4,6-10,14")
+///         .unwrap()
+///         .collect();
+/// #     Ok(())
+/// # }
+/// ```
+///
+/// Since it is made using generics to be able to pass as many types
+/// of numeric types as possible, you might have to give the types in
+/// between when rust cannot infer it.
+///
+/// ```rust
+/// # use std::error::Error;
+/// # use number_range::NumberRangeOptions;
+/// #
+/// # fn main() -> Result<(), Box<dyn Error>> {
 /// NumberRangeOptions::new()
 ///              .with_list_sep(',')
 ///              .with_range_sep('-')
@@ -23,6 +41,11 @@ enum Number<T> {
 /// #     Ok(())
 /// # }
 /// ```
+///
+/// All the numbers in the string must be of the same type that you
+/// want to parse into, due to that restriction even the step needs to
+/// be unsigned for unsigned integer (meaning `"4:-1:1"` would fail
+/// even if the final output should be unsigned).
 #[derive(Debug)]
 pub struct NumberRangeOptions {
     pub list_sep: char,
@@ -30,6 +53,17 @@ pub struct NumberRangeOptions {
 }
 
 /// NumberRange struct, once you've parsed the string you can iterate though it.
+///
+/// ```rust
+/// # use std::error::Error;
+/// # use number_range::NumberRange;
+/// #
+/// # fn main() -> Result<(), Box<dyn Error>> {
+/// NumberRange::<i64>::default()
+/// 	.parse_str("-10,3:10,14:2:20")?;
+/// #     Ok(())
+/// # }
+/// ```
 #[derive(Debug)]
 pub struct NumberRange<'a, T> {
     numbers: VecDeque<Number<T>>,
@@ -43,7 +77,7 @@ impl<'a, T> std::fmt::Display for NumberRange<'a, T> {
     }
 }
 
-impl<'a, T: Copy + std::ops::Add<Output = T> + std::cmp::PartialOrd> Iterator
+impl<'a, T: Copy + std::ops::Add<Output = T> + std::cmp::PartialOrd + num::Zero> Iterator
     for NumberRange<'a, T>
 {
     type Item = T;
@@ -58,7 +92,9 @@ impl<'a, T: Copy + std::ops::Add<Output = T> + std::cmp::PartialOrd> Iterator
                 Some(v)
             }
             Number::Range(start, step, end) => {
-                if start > end {
+                if (start > end && step > num::Zero::zero())
+                    || (start < end && step < num::Zero::zero())
+                {
                     self.numbers.pop_front();
                     self.next()
                 } else {
@@ -286,6 +322,8 @@ mod tests {
     #[case("1-4", '-', vec![1,2,3,4])]
     #[case("1:3:4", ':', vec![1, 4])]
     #[should_panic]
+    #[case("4:-3:1", ':', vec![])]
+    #[should_panic]
     #[case("1--4", '-', vec![])]
     fn comma_test_range_usize(#[case] numstr: &str, #[case] sep: char, #[case] numvec: Vec<usize>) {
         assert_eq!(
@@ -294,6 +332,24 @@ mod tests {
                 .parse::<usize>(numstr)
                 .unwrap()
                 .collect::<Vec<usize>>(),
+            numvec
+        );
+    }
+
+    #[rstest]
+    #[case("200", '-',vec![200])]
+    #[case("1-4", '-', vec![1,2,3,4])]
+    #[case("1:3:4", ':', vec![1, 4])]
+    #[case("4:-3:1", ':', vec![4, 1])]
+    #[case("-4:1", ':', vec![-4, -3, -2, -1, 0, 1])]
+    #[case("1:-4", ':', vec![])]
+    fn comma_test_range_i64(#[case] numstr: &str, #[case] sep: char, #[case] numvec: Vec<i64>) {
+        assert_eq!(
+            NumberRangeOptions::new()
+                .with_range_sep(sep)
+                .parse::<i64>(numstr)
+                .unwrap()
+                .collect::<Vec<i64>>(),
             numvec
         );
     }
