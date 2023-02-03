@@ -11,10 +11,12 @@
 //!
 //! # Limitations
 //! - Step size needs to be the same type as the number type, which
-//!   means you can't use negative numbers for unsigned integers.
+//!   means you can't use negative numbers for unsigned numbers.
 //! - Automatic step size can only be one, not negative one as the code
 //!   is generic for unsigned too, so if you want negative step for
-//!   signed integers you need to specify that.
+//!   signed numbers you need to specify that.
+//! - Although it works with floats as well, not just integers, the
+//!   float step size might not be accurate.
 
 use itertools::Itertools;
 use std::collections::VecDeque;
@@ -81,7 +83,7 @@ pub enum Number<T> {
 ///
 /// All the numbers in the string must be of the same type that you
 /// want to parse into, due to that restriction even the step needs to
-/// be unsigned for unsigned integer (meaning `"4:-1:1"` would fail
+/// be unsigned for unsigned number (meaning `"4:-1:1"` would fail
 /// even if the final output should be unsigned).
 #[derive(Debug)]
 pub struct NumberRangeOptions {
@@ -257,18 +259,18 @@ impl<'a, T: std::str::FromStr + num::One + Copy> NumberRange<'a, T> {
                         0 => seq_str
                             .trim()
                             .parse::<T>()
-                            .map_err(|_| "Not an Integer".to_string())
+                            .map_err(|_| "Not a Number".to_string())
                             .map(|v| Number::Single(v)),
                         1 => match seq_str.split_once(self.options.range_sep) {
                             Some((start, end)) => {
                                 let start = start
                                     .trim()
                                     .parse::<T>()
-                                    .map_err(|_| "Not an Integer".to_string())?;
+                                    .map_err(|_| "Not a Number".to_string())?;
                                 let end = end
                                     .trim()
                                     .parse::<T>()
-                                    .map_err(|_| "Not an Integer".to_string())?;
+                                    .map_err(|_| "Not a Number".to_string())?;
                                 Ok(Number::Range(start, num::One::one(), end))
                             }
                             None => panic!(
@@ -281,7 +283,7 @@ impl<'a, T: std::str::FromStr + num::One + Copy> NumberRange<'a, T> {
                                 .map(|s| -> Result<T, String> {
                                     s.trim()
                                         .parse::<T>()
-                                        .map_err(|_| "Not an Integer".to_string())
+                                        .map_err(|_| "Not a Number".to_string())
                                 })
                                 .collect::<Result<Vec<T>, String>>()?;
                             Ok(Number::Range(nums[0], nums[1], nums[2]))
@@ -433,6 +435,25 @@ mod tests {
                 .parse::<i64>(numstr)
                 .unwrap()
                 .collect::<Vec<i64>>(),
+            numvec
+        );
+    }
+
+    #[rstest]
+    #[case("200", '-',vec![200.0])]
+    #[case("1-4", '-', vec![1.0,2.0,3.0,4.0])]
+    #[case("1:3:4", ':', vec![1.0, 4.0])]
+    #[case("1:.5:4", ':', vec![1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0])]
+    #[case("4:-3:1", ':', vec![4.0, 1.0])]
+    #[case("-4:1", ':', vec![-4.0, -3.0, -2.0, -1.0, 0.0, 1.0])]
+    #[case("1:-4", ':', vec![])]
+    fn comma_test_range_f64(#[case] numstr: &str, #[case] sep: char, #[case] numvec: Vec<f64>) {
+        assert_eq!(
+            NumberRangeOptions::new()
+                .with_range_sep(sep)
+                .parse::<f64>(numstr)
+                .unwrap()
+                .collect::<Vec<f64>>(),
             numvec
         );
     }
