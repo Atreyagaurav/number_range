@@ -1,7 +1,44 @@
+//! # Number Range
+//! Convert to from human readable number range into
+//! iterator. It makes it easy to parse the command line arguments in
+//! the form of `num`, `num1:num2`, `num1:step:num2` or comma
+//! separated list of them.
+//!
+//! # Features
+//! - Parse from human redable format into an iterator ([NumberRange<T>])
+//!   for any generic number format
+//! - Configuration options for list and range separators ([NumberRangeOptions])
+//!
+//! # Limitations
+//! - Step size needs to be the same type as the number type, which
+//!   means you can't use negative numbers for unsigned integers.
+//! - Automatic step size can only be one, not negative one as the code
+//!   is generic for unsigned too, so if you want negative step for
+//!   signed integers you need to specify that.
+
+use itertools::Itertools;
 use std::collections::VecDeque;
 
+/// Number type for simple interger numbers or number range. The
+/// [NumberRange<T>] is made up of these, so you can use it to build
+/// the [NumberRange<T>] manually.
+///
+/// ```rust
+/// # use std::error::Error;
+/// # use number_range::{NumberRange,Number};
+/// #
+/// # fn main() -> Result<(), Box<dyn Error>> {
+/// let mut rng = NumberRange::<i64>::default();
+/// rng.numbers.push_back(Number::Single(1));
+/// rng.numbers.push_back(Number::Range(3,2,6));
+/// rng.numbers.push_back(Number::Range(-4,1,-2));
+/// println!("{}", rng); // 1,3:2:6,-4:-2
+/// println!("{:?}", rng.collect::<Vec<i64>>()); // [1, 3, 5, -4, -3, -2]
+/// #     Ok(())
+/// # }
+/// ```
 #[derive(Debug)]
-enum Number<T> {
+pub enum Number<T> {
     Single(T),
     Range(T, T, T),
 }
@@ -60,20 +97,36 @@ pub struct NumberRangeOptions {
 /// #
 /// # fn main() -> Result<(), Box<dyn Error>> {
 /// NumberRange::<i64>::default()
-/// 	.parse_str("-10,3:10,14:2:20")?;
+///     .parse_str("-10,3:10,14:2:20")?;
 /// #     Ok(())
 /// # }
 /// ```
 #[derive(Debug)]
 pub struct NumberRange<'a, T> {
-    numbers: VecDeque<Number<T>>,
-    repr: Option<&'a str>,
-    options: &'a NumberRangeOptions,
+    pub numbers: VecDeque<Number<T>>,
+    original_repr: Option<&'a str>,
+    pub options: &'a NumberRangeOptions,
 }
 
-impl<'a, T> std::fmt::Display for NumberRange<'a, T> {
+impl<'a, T: std::fmt::Display + num::One + std::cmp::PartialEq> std::fmt::Display
+    for NumberRange<'a, T>
+{
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.repr.unwrap_or_default())
+        let repr = self
+            .numbers
+            .iter()
+            .map(|n| match n {
+                Number::Single(v) => format!("{}", v),
+                Number::Range(s, i, e) => {
+                    if i.is_one() {
+                        format!("{}{}{}", s, self.options.range_sep, e)
+                    } else {
+                        format!("{}{}{}{1}{}", s, self.options.range_sep, i, e)
+                    }
+                }
+            })
+            .join(&self.options.list_sep.to_string());
+        write!(f, "{}", repr)
     }
 }
 
@@ -156,7 +209,7 @@ impl<'a, T> Default for NumberRange<'a, T> {
     fn default() -> Self {
         Self {
             numbers: VecDeque::new(),
-            repr: None,
+            original_repr: None,
             options: NumberRangeOptions::global_default(),
         }
     }
@@ -167,9 +220,14 @@ impl<'a, T: std::str::FromStr + num::One + Copy> NumberRange<'a, T> {
     pub fn with_options(options: &'a NumberRangeOptions) -> Self {
         Self {
             numbers: VecDeque::new(),
-            repr: None,
+            original_repr: None,
             options,
         }
+    }
+
+    /// Get the Original String that was used to parse the iterator
+    pub fn original(&self) -> &str {
+        self.original_repr.unwrap_or("")
     }
 
     /// Parse the human readable string (`numstr`).
@@ -187,11 +245,11 @@ impl<'a, T: std::str::FromStr + num::One + Copy> NumberRange<'a, T> {
     /// # }
     /// ```
     pub fn parse_str(mut self, numstr: &'a str) -> Result<Self, String> {
-        self.repr = Some(numstr);
+        self.original_repr = Some(numstr);
         self.parse()
     }
     pub fn parse(mut self) -> Result<Self, String> {
-        if let Some(numstr) = self.repr {
+        if let Some(numstr) = self.original_repr {
             let numbers: VecDeque<Number<T>> = numstr
                 .split(self.options.list_sep)
                 .map(|seq_str| -> Result<Number<T>, String> {
@@ -236,7 +294,6 @@ impl<'a, T: std::str::FromStr + num::One + Copy> NumberRange<'a, T> {
                 })
                 .collect::<Result<VecDeque<Number<T>>, String>>()?;
             self.numbers = numbers;
-            self.repr = Some(numstr);
             Ok(self)
         } else {
             Err("Nothing to Parse".to_string())
@@ -250,6 +307,16 @@ use rstest::rstest;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[rstest]
+    fn manual_build() {
+        let mut rng = NumberRange::<i64>::default();
+        rng.numbers.push_back(Number::Single(1));
+        rng.numbers.push_back(Number::Range(3, 2, 6));
+        rng.numbers.push_back(Number::Range(-4, 1, -2));
+        assert_eq!(format!("{}", rng), "1,3:2:6,-4:-2");
+        assert_eq!(rng.collect::<Vec<i64>>(), vec![1, 3, 5, -4, -3, -2]);
+    }
 
     #[rstest]
     #[case("200", vec![200])]
@@ -294,6 +361,22 @@ mod tests {
                 .collect::<Vec<usize>>(),
             numvec
         );
+    }
+
+    #[rstest]
+    #[case("200", vec!["200"])]
+    #[case("1,4", vec!["1,4", "4"])]
+    #[case("1:4", vec!["1:4", "2:4", "3:4", "4:4"])]
+    #[case("10:-4:4", vec!["10:-4:4", "6:-4:4"])]
+    #[case("4:-1:1", vec!["4:-1:1", "3:-1:1", "2:-1:1", "1:-1:1"])]
+    #[case("1:4:10", vec!["1:4:10", "5:4:10", "9:4:10"])]
+    fn format_test_loop(#[case] numstr: &str, #[case] numvec: Vec<&str>) {
+        let mut rng: NumberRange<i64> = NumberRange::default().parse_str(numstr).unwrap();
+        for fmt_str in numvec {
+            assert_eq!(fmt_str, format!("{}", &rng));
+            rng.next();
+        }
+        assert!(rng.next().is_none());
     }
 
     #[rstest]

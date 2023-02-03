@@ -7,6 +7,9 @@ There are two separators, `list_sep` (default `,`) and `range_sep` (default `:`)
 - `start:end` ⇒ Inclusive Range with step 1 (e.g. `1:10`)
 - `start:step:end` ⇒ Inclusive Range with variable step (e.g. `1:2:10`)
 
+# Disclaimers
+This is unstable library, I'll be changing a few things that might break the compatibility with older versions till I can figure things out to make the parsing optimum. 
+
 # Uses
 The simple use case is:
 ```rust
@@ -24,3 +27,7 @@ NumberRangeOptions::new()
              .with_range_sep('-')
              .parse::<usize>("1,3-10,14")?;
 ```
+
+# Links
+- Crate: <https://crates.io/crates/number_range>
+- Documentation: <https://docs.rs/number_range/0.1.2>
