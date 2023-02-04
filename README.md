@@ -10,6 +10,8 @@ There are two separators, `list_sep` (default `,`) and `range_sep` (default `:`)
 # Disclaimers
 This is unstable library, I'll be changing a few things that might break the compatibility with older versions till I can figure things out to make the parsing optimum. 
 
+Even though the name is called Number Range, this is made to be used with Integers in mind, although the generics does work for float numbers, the results might not be as expected (which are the limitations of using float operations in rust).
+
 # Uses
 The simple use case is:
 ```rust
@@ -30,4 +32,4 @@ NumberRangeOptions::new()
 
 # Links
 - Crate: <https://crates.io/crates/number_range>
-- Documentation: <https://docs.rs/number_range/0.1.2>
+- Documentation: <https://docs.rs/number_range/latest/number_range/>
