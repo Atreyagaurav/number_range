@@ -1,13 +1,15 @@
-//! # Number Range
-//! Convert to from human readable number range into
+//! # Introduction
+//! To convert from human readable number range into an
 //! iterator. It makes it easy to parse the command line arguments in
 //! the form of `num`, `num1:num2`, `num1:step:num2` or comma
 //! separated list of them.
 //!
 //! # Features
-//! - Parse from human redable format into an iterator ([NumberRange<T>])
+//! - Parse from human redable format into an iterator ([`NumberRange<T>`])
 //!   for any generic number format
-//! - Configuration options for list and range separators ([NumberRangeOptions])
+//! - Configuration options for list and range separators ([`NumberRangeOptions`]).
+//!   You can also use it to provide options to parse numbers in different
+//!   localization, like grouping or different decimal separator.
 //!
 //! # Limitations
 //! - Step size needs to be the same type as the number type, which
@@ -22,8 +24,8 @@ use itertools::Itertools;
 use std::collections::VecDeque;
 
 /// Number type for simple interger numbers or number range. The
-/// [NumberRange<T>] is made up of these, so you can use it to build
-/// the [NumberRange<T>] manually.
+/// [`NumberRange<T>`] is made up of these, so you can use it to build
+/// the [`NumberRange<T>`] manually.
 ///
 /// ```rust
 /// # use std::error::Error;
@@ -85,7 +87,8 @@ impl<T: num::Zero + std::cmp::PartialOrd + Copy> Number<T> {
     }
 }
 
-/// Options for the NumberRange
+/// Options for the NumberRange, includes different separator
+/// character customization.
 ///
 /// For example, if you're dealing with unsigned numbers then you can
 /// use `-` as a range separator to parse ranges from many sources.
@@ -141,13 +144,51 @@ impl<T: num::Zero + std::cmp::PartialOrd + Copy> Number<T> {
 /// want to parse into, due to that restriction even the step needs to
 /// be unsigned for unsigned number (meaning `"4:-1:1"` would fail
 /// even if the final output should be unsigned).
+///
+/// Another function is to parse the numbers in different localization
+/// like different decimal separators or grouping of numbers.
+/// ```rust
+/// # use std::error::Error;
+/// # use number_range::{NumberRange, NumberRangeOptions};
+/// #
+/// # fn main() -> Result<(), Box<dyn Error>> {
+/// let rng: Vec<usize> = NumberRangeOptions::new()
+///              .with_list_sep('/')
+///              .with_range_sep('-')
+///              .with_group_sep(',')
+///              .with_whitespace(true)
+///              .parse("1,200/1, 400, 230")?.collect();
+/// assert_eq!(rng, vec![1200, 1400230]);
+/// #     Ok(())
+/// # }
+/// ```
 #[derive(Debug)]
 pub struct NumberRangeOptions {
+    /// Character used to group numbers [default: `_`]. Group
+    /// separator is the first one to be removed from the string, if
+    /// any other characters are same as the group separators then
+    /// they'll be useless.
+    pub group_sep: char,
+    /// Remove spaces between the numbers. While spaces are removed
+    /// after the group separator. If any other separator characters
+    /// are whitespace they'll be useless.
+    pub whitespace: bool,
+    /// Decimal separator [default: `.`]. Decimal separator is
+    /// replaced by `.` for rust to parse the float properly. The
+    /// replacement occurs after the whitespace removal.
+    pub decimal_sep: char,
+    /// Separator for different numbers or numbers range [default:
+    /// `,`]. List separator is used to split first.
     pub list_sep: char,
+    /// Separator for range start, step, and end [default: `:`]. This
+    /// one is used at the end, so if it is using the same character
+    /// as other separators, it'll be useless, or have different
+    /// meaning.
     pub range_sep: char,
 }
 
-/// NumberRange struct, once you've parsed the string you can iterate though it.
+/// Representation of Number Ranges, once you've parsed the string you
+/// can iterate though it.
 ///
 /// ```rust
 /// # use std::error::Error;
@@ -234,23 +275,44 @@ impl NumberRangeOptions {
         Self {
             list_sep: ',',
             range_sep: ':',
+            decimal_sep: '.',
+            group_sep: '_',
+            whitespace: false,
         }
     }
 
-    /// Change the list separator character (default `,`)
+    /// Change the group separator character
+    pub fn with_group_sep(mut self, sep: char) -> Self {
+        self.group_sep = sep;
+        self
+    }
+
+    /// Change the group separator character
+    pub fn with_whitespace(mut self, flag: bool) -> Self {
+        self.whitespace = flag;
+        self
+    }
+
+    /// Change the decimal separator character
+    pub fn with_decimal_sep(mut self, sep: char) -> Self {
+        self.decimal_sep = sep;
+        self
+    }
+
+    /// Change the list separator character
     pub fn with_list_sep(mut self, sep: char) -> Self {
         self.list_sep = sep;
         self
     }
 
-    /// Change the range separator character (default `:`)
+    /// Change the range separator character
     pub fn with_range_sep(mut self, sep: char) -> Self {
         self.range_sep = sep;
         self
     }
 
-    /// Same as NumberRange::parse_str(), Makes a NumberRange and parses
-    /// the string.
+    /// Same as [`NumberRange::parse_str()`], Makes a
+    /// [`NumberRange<T>`] and parses the string.
     pub fn parse<'a, T: std::str::FromStr + num::One + Copy>(
         self,
         numstr: &'a str,
@@ -261,6 +323,8 @@ impl NumberRangeOptions {
 }
 
 impl<'a, T> Default for NumberRange<'a, T> {
+    /// It builds a NumberRange struct with
+    /// [`NumberRangeOptions::new()`] options.
     fn default() -> Self {
         Self {
             numbers: VecDeque::new(),
@@ -303,27 +367,30 @@ impl<'a, T: std::str::FromStr + num::One + Copy> NumberRange<'a, T> {
         self.original_repr = Some(numstr);
         self.parse()
     }
+
+    fn parse_number(&self, num: &str) -> Result<T, String> {
+        let num = num.trim().replace(self.options.group_sep, "");
+        let num = if self.options.whitespace {
+            num.split_whitespace().join("")
+        } else {
+            num
+        };
+        num.replace(self.options.decimal_sep, ".")
+            .parse::<T>()
+            .map_err(|_| "Not a Number".to_string())
+    }
+
     pub fn parse(mut self) -> Result<Self, String> {
         if let Some(numstr) = self.original_repr {
             let numbers: VecDeque<Number<T>> = numstr
                 .split(self.options.list_sep)
                 .map(|seq_str| -> Result<Number<T>, String> {
                     match seq_str.matches(self.options.range_sep).count() {
-                        0 => seq_str
-                            .trim()
-                            .parse::<T>()
-                            .map_err(|_| "Not a Number".to_string())
-                            .map(|v| Number::Single(v)),
+                        0 => self.parse_number(seq_str).map(|v| Number::Single(v)),
                         1 => match seq_str.split_once(self.options.range_sep) {
                             Some((start, end)) => {
-                                let start = start
-                                    .trim()
-                                    .parse::<T>()
-                                    .map_err(|_| "Not a Number".to_string())?;
-                                let end = end
-                                    .trim()
-                                    .parse::<T>()
-                                    .map_err(|_| "Not a Number".to_string())?;
+                                let start = self.parse_number(start)?;
+                                let end = self.parse_number(end)?;
                                 Ok(Number::Range(start, num::One::one(), end))
                             }
                             None => panic!(
@@ -333,11 +400,7 @@ impl<'a, T: std::str::FromStr + num::One + Copy> NumberRange<'a, T> {
                         2 => {
                             let nums: Vec<T> = seq_str
                                 .splitn(3, self.options.range_sep)
-                                .map(|s| -> Result<T, String> {
-                                    s.trim()
-                                        .parse::<T>()
-                                        .map_err(|_| "Not a Number".to_string())
-                                })
+                                .map(|s| -> Result<T, String> { self.parse_number(s) })
                                 .collect::<Result<Vec<T>, String>>()?;
                             Ok(Number::Range(nums[0], nums[1], nums[2]))
                         }

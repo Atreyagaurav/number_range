@@ -13,6 +13,7 @@ This is unstable library, I'll be changing a few things that might break the com
 Even though the name is called Number Range, this is made to be used with Integers in mind, although the generics does work for float numbers, the results might not be as expected (which are the limitations of using float operations in rust).
 
 # Uses
+## NumberRange
 The simple use case is:
 ```rust
 NumberRange::<i64>::default()
@@ -22,12 +23,23 @@ It'll return you an iterator that you can use to iterate through those numbers. 
 
 All the numbers in the string must be of the same type that you want to parse into, due to that restriction even the step needs to be unsigned for unsigned integer (meaning `"4:-1:1"` would fail even if the final output should be unsigned).
 
+## NumberRangeOptions
 The separators can be customized using the `NumberRangeOptions`. For example, if you're dealing with unsigned numbers then you can use `-` as a range separator to parse ranges from many sources.
 ```rust
 NumberRangeOptions::new()
              .with_list_sep(',')
              .with_range_sep('-')
              .parse::<usize>("1,3-10,14")?;
+```
+Parsing numbers with localization.
+```rust
+let rng: Vec<usize> = NumberRangeOptions::new()
+             .with_list_sep('/')
+             .with_range_sep('-')
+             .with_group_sep(',')
+             .with_whitespace(true)
+             .parse("1,200/1, 400, 230")?.collect();
+assert_eq!(rng, vec![1200, 1400230]);
 ```
 
 # Links
