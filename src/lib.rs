@@ -45,6 +45,46 @@ pub enum Number<T> {
     Range(T, T, T),
 }
 
+impl<T: num::Zero + std::cmp::PartialOrd + Copy> Number<T> {
+    /// Checks the validity of the number/range
+    ///
+    /// ```rust
+    /// # use std::error::Error;
+    /// # use number_range::Number;
+    /// #
+    /// # fn main() -> Result<(), Box<dyn Error>> {
+    /// assert!(Number::Single(1).is_valid());
+    /// assert!(Number::Range(3,2,6).is_valid());
+    /// assert!(Number::Range(-4,1,-2).is_valid());
+    /// #     Ok(())
+    /// # }
+    /// ```
+    pub fn is_valid(&self) -> bool {
+        match self {
+            Number::Single(_) => true,
+            Number::Range(start, step, end) => {
+                ((start <= end) && (step > &num::Zero::zero()))
+                    || ((start >= end) && (step < &num::Zero::zero()))
+            }
+        }
+    }
+    /// Opposite of is_valid
+    ///
+    /// ```rust
+    /// # use std::error::Error;
+    /// # use number_range::Number;
+    /// #
+    /// # fn main() -> Result<(), Box<dyn Error>> {
+    /// assert!(Number::Range(3,-2,6).is_invalid());
+    /// assert!(Number::Range(4,1,2).is_invalid());
+    /// #     Ok(())
+    /// # }
+    /// ```
+    pub fn is_invalid(&self) -> bool {
+        !self.is_valid()
+    }
+}
+
 /// Options for the NumberRange
 ///
 /// For example, if you're dealing with unsigned numbers then you can
@@ -60,13 +100,29 @@ pub enum Number<T> {
 ///         .parse("1,4,6-10,14")
 ///         .unwrap()
 ///         .collect();
-/// #     Ok(())
+///     println!("{:?}", rng);
+/// #   Ok(())
 /// # }
 /// ```
 ///
 /// Since it is made using generics to be able to pass as many types
 /// of numeric types as possible, you might have to give the types in
 /// between when rust cannot infer it.
+///
+/// It can be inferred if you have intermediate variables with type.
+/// ```rust
+/// # use std::error::Error;
+/// # use number_range::{NumberRange,NumberRangeOptions};
+/// #
+/// # fn main() -> Result<(), Box<dyn Error>> {
+///     let rng: NumberRange<usize> = NumberRangeOptions::default()
+///         .with_range_sep('-')
+///         .parse("1,4,6-10,14")
+///         .unwrap();
+///     println!("{:?}", rng.collect::<Vec<usize>>());
+/// #   Ok(())
+/// # }
+/// ```
 ///
 /// ```rust
 /// # use std::error::Error;
@@ -107,7 +163,7 @@ pub struct NumberRangeOptions {
 pub struct NumberRange<'a, T> {
     pub numbers: VecDeque<Number<T>>,
     original_repr: Option<&'a str>,
-    pub options: &'a NumberRangeOptions,
+    pub options: NumberRangeOptions,
 }
 
 impl<'a, T: std::fmt::Display + num::One + std::cmp::PartialEq> std::fmt::Display
@@ -147,14 +203,19 @@ impl<'a, T: Copy + std::ops::Add<Output = T> + std::cmp::PartialOrd + num::Zero>
                 Some(v)
             }
             Number::Range(start, step, end) => {
-                if (start > end && step > num::Zero::zero())
-                    || (start < end && step < num::Zero::zero())
-                {
+                // checking this one coz people can insert their invalid ranges or parse invalid ones
+                if self.numbers[0].is_valid() {
+                    let next_step = Number::Range(start + step, step, end);
+                    // checking here to always have valid steps
+                    if next_step.is_valid() {
+                        self.numbers[0] = next_step;
+                    } else {
+                        self.numbers.pop_front();
+                    }
+                    Some(start)
+                } else {
                     self.numbers.pop_front();
                     self.next()
-                } else {
-                    self.numbers[0] = Number::Range(start + step, step, end);
-                    Some(start)
                 }
             }
         }
@@ -176,22 +237,14 @@ impl NumberRangeOptions {
         }
     }
 
-    /// Globally default Option to pass around
-    pub fn global_default() -> &'static Self {
-        &Self {
-            list_sep: ',',
-            range_sep: ':',
-        }
-    }
-
     /// Change the list separator character (default `,`)
-    pub fn with_list_sep(&mut self, sep: char) -> &mut Self {
+    pub fn with_list_sep(mut self, sep: char) -> Self {
         self.list_sep = sep;
         self
     }
 
     /// Change the range separator character (default `:`)
-    pub fn with_range_sep(&mut self, sep: char) -> &mut Self {
+    pub fn with_range_sep(mut self, sep: char) -> Self {
         self.range_sep = sep;
         self
     }
@@ -199,10 +252,10 @@ impl NumberRangeOptions {
     /// Same as NumberRange::parse_str(), Makes a NumberRange and parses
     /// the string.
     pub fn parse<'a, T: std::str::FromStr + num::One + Copy>(
-        &'a self,
+        self,
         numstr: &'a str,
     ) -> Result<NumberRange<T>, String> {
-        let nr = NumberRange::with_options(self);
+        let nr = NumberRange::from_options(self);
         nr.parse_str(numstr)
     }
 }
@@ -212,14 +265,14 @@ impl<'a, T> Default for NumberRange<'a, T> {
         Self {
             numbers: VecDeque::new(),
             original_repr: None,
-            options: NumberRangeOptions::global_default(),
+            options: NumberRangeOptions::default(),
         }
     }
 }
 
 impl<'a, T: std::str::FromStr + num::One + Copy> NumberRange<'a, T> {
-    /// New NumberRange struct with NumberRangeOptions.
-    pub fn with_options(options: &'a NumberRangeOptions) -> Self {
+    /// New NumberRange struct from NumberRangeOptions
+    pub fn from_options(options: NumberRangeOptions) -> Self {
         Self {
             numbers: VecDeque::new(),
             original_repr: None,
@@ -318,6 +371,50 @@ mod tests {
         rng.numbers.push_back(Number::Range(-4, 1, -2));
         assert_eq!(format!("{}", rng), "1,3:2:6,-4:-2");
         assert_eq!(rng.collect::<Vec<i64>>(), vec![1, 3, 5, -4, -3, -2]);
+    }
+
+    #[rstest]
+    fn options_build() {
+        let rng: NumberRange<usize> = NumberRangeOptions::default()
+            .with_list_sep('*')
+            .with_range_sep('/')
+            .parse("1*3/5*9/2/15")
+            .expect("Parsing should be succesful");
+        assert_eq!(rng.collect::<Vec<usize>>(), vec![1, 3, 4, 5, 9, 11, 13, 15]);
+    }
+
+    #[rstest]
+    fn manual_build_then_modify() {
+        let mut rng = NumberRange::<i64>::default();
+        rng.numbers.push_back(Number::Single(1));
+        rng.numbers.push_back(Number::Range(3, 2, 6));
+        rng.numbers.push_back(Number::Range(-4, 1, -2));
+        let values = vec![1, 3, 5, -4, -3, -2];
+        assert_eq!(format!("{}", rng), "1,3:2:6,-4:-2");
+        for i in 0..4 {
+            assert_eq!(rng.next().expect("Should have next"), values[i]);
+        }
+        assert_eq!(format!("{}", rng), "-3:-2");
+        rng.numbers.push_back(Number::Single(1));
+        assert_eq!(format!("{}", rng), "-3:-2,1");
+        assert_eq!(rng.collect::<Vec<i64>>(), vec![-3, -2, 1]);
+    }
+
+    #[rstest]
+    fn options_build_then_modify() {
+        let mut rng: NumberRange<usize> = NumberRangeOptions::default()
+            .with_list_sep(':')
+            .with_range_sep('-')
+            .parse("1:3-5:9")
+            .expect("Parsing should be succesful");
+        let values = vec![1, 3, 4, 5, 9];
+        for i in 0..4 {
+            assert_eq!(rng.next().expect("Should have next"), values[i]);
+        }
+        assert_eq!(format!("{}", rng), "9");
+        rng.numbers.push_back(Number::Range(11, 2, 15));
+        assert_eq!(format!("{}", rng), "9:11-2-15");
+        assert_eq!(rng.collect::<Vec<usize>>(), vec![9, 11, 13, 15]);
     }
 
     #[rstest]
