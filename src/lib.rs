@@ -368,7 +368,7 @@ impl<'a, T: std::str::FromStr + num::One + Copy> NumberRange<'a, T> {
         self.parse()
     }
 
-    fn parse_number(&self, num: &str) -> Result<T, String> {
+    fn sanitize_number(&self, num: &str) -> String {
         let num = num.trim().replace(self.options.group_sep, "");
         let num = if self.options.whitespace {
             num.split_whitespace().join("")
@@ -376,12 +376,20 @@ impl<'a, T: std::str::FromStr + num::One + Copy> NumberRange<'a, T> {
             num
         };
         num.replace(self.options.decimal_sep, ".")
+    }
+
+    fn parse_number(&self, num: &str) -> Result<T, String> {
+        self.sanitize_number(num)
             .parse::<T>()
             .map_err(|_| "Not a Number".to_string())
     }
 
     pub fn parse(mut self) -> Result<Self, String> {
         if let Some(numstr) = self.original_repr {
+            if self.sanitize_number(numstr) == "" {
+                self.numbers.clear();
+                return Ok(self);
+            }
             let numbers: VecDeque<Number<T>> = numstr
                 .split(self.options.list_sep)
                 .map(|seq_str| -> Result<Number<T>, String> {
@@ -616,5 +624,19 @@ mod tests {
                 .collect::<Vec<f64>>(),
             numvec
         );
+    }
+
+    #[rstest]
+    fn comma_test_empty_range() {
+        assert_eq!(
+            NumberRange::default()
+                .parse_str("")
+                .unwrap()
+                .collect::<Vec<f64>>(),
+            vec![]
+        );
+        // testing to make sure it removes the old values from iterators
+        let rng = NumberRange::default().parse_str("1:10").unwrap();
+        assert_eq!(rng.parse_str("").unwrap().collect::<Vec<f64>>(), vec![]);
     }
 }
