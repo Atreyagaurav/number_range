@@ -1,6 +1,6 @@
 [package]
 name = "number_range"
-version = "0.1.4"
+version = "0.2.0"
 edition = "2021"
 description = "Library to parse list of numbers from human readable string"
 repository = "https://github.com/Atreyagaurav/number_range"
@@ -12,6 +12,7 @@ categories = ["parsing", "command-line-interface"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow = "1.0.69"
 itertools = "0.10.5"
 num = "0.4.0"
 
