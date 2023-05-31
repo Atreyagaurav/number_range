@@ -46,7 +46,7 @@ From Rust `List` or `Vec`:
 ```rust
 assert_eq!(
     format!("{}", NumberRange::default()
-           .from_vec(&[1,3,4,5,6,7,8,9,10,14], None)),
+           .from_vec([1,3,4,5,6,7,8,9,10,14], None)),
                      "1,3:10,14");
 ```
 
