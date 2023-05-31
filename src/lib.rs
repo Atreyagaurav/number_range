@@ -586,6 +586,51 @@ where
     }
 }
 
+/// Macro rule for generating number range. The [`NumberRange<T>`] is
+/// made with default options, then parsed.
+///
+/// ```rust
+/// # use std::error::Error;
+/// # use number_range::numrng;
+/// #
+/// # fn main() -> Result<(), Box<dyn Error>> {
+/// let mut rng = numrng!(1,3:2:6,-4:-2);
+/// assert_eq!(format!("{}", rng), "1,3:2:6,-4:-2");
+/// assert_eq!(rng.collect::<Vec<i64>>(), vec![1, 3, 5, -4, -3, -2]);
+/// assert_eq!(numrng!().collect::<Vec<i64>>(), vec![]);
+/// #     Ok(())
+/// # }
+/// ```
+#[macro_export]
+macro_rules! numrng {
+    ($($l:tt)*) => {
+	// stringify seems to introduce extra spaces between all characters
+        $crate::NumberRangeOptions::new().with_whitespace(true).parse(stringify!($($l)*)).unwrap()
+    };
+}
+
+/// Macro rule for generating number range into vec. The
+/// [`NumberRange<T>`] is made with default options, then parsed and
+/// collected into a Vec<T>.
+///
+/// ```rust
+/// # use std::error::Error;
+/// # use number_range::numvec;
+/// #
+/// # fn main() -> Result<(), Box<dyn Error>> {
+/// let mut rng: Vec<i64> = numvec!(1,3:2:6,-4:-2);
+/// assert_eq!(rng, vec![1, 3, 5, -4, -3, -2]);
+/// #     Ok(())
+/// # }
+/// ```
+#[macro_export]
+macro_rules! numvec {
+    ($($l:tt)*) => {
+        $crate::numrng!($($l)*)
+            .collect()
+    };
+}
+
 #[cfg(test)]
 use rstest::rstest;
 
