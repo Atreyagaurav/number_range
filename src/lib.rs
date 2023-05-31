@@ -25,7 +25,7 @@ use itertools::Itertools;
 use std::collections::VecDeque;
 
 #[derive(Debug)]
-struct NumberRangeError;
+pub struct NumberRangeError;
 
 impl std::error::Error for NumberRangeError {}
 
@@ -265,9 +265,6 @@ pub struct NumberRange<'a, T> {
     original_repr: Option<&'a str>,
     pub options: NumberRangeOptions<T>,
 }
-
-#[derive(Debug, PartialEq, Eq)]
-pub struct NumberRangeParseError;
 
 impl<'a, T: std::fmt::Display + num::One + std::cmp::PartialEq> std::fmt::Display
     for NumberRange<'a, T>
