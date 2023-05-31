@@ -48,8 +48,8 @@ impl std::fmt::Display for NumberRangeError {
 /// rng.numbers.push_back(Number::Single(1));
 /// rng.numbers.push_back(Number::Range(3,2,6));
 /// rng.numbers.push_back(Number::Range(-4,1,-2));
-/// println!("{}", rng); // 1,3:2:6,-4:-2
-/// println!("{:?}", rng.collect::<Vec<i64>>()); // [1, 3, 5, -4, -3, -2]
+/// assert_eq!(format!("{}", rng), "1,3:2:6,-4:-2");
+/// assert_eq!(rng.collect::<Vec<i64>>(), vec![1, 3, 5, -4, -3, -2]);
 /// #     Ok(())
 /// # }
 /// ```
@@ -160,9 +160,9 @@ impl<T: num::Zero + std::cmp::PartialOrd + Copy> Number<T> {
 /// # fn main() -> Result<(), Box<dyn Error>> {
 /// assert_eq!(NumberRangeOptions::<usize>::new()
 ///              .with_list_sep(',')
-///              .with_range_sep('-')
+///              .with_range_sep(':')
 ///              .with_default_start(1)
-///              .parse("-4,14")?.collect::<Vec<usize>>(), vec![1,2,3,4,14]);
+///              .parse(":4,14")?.collect::<Vec<usize>>(), vec![1,2,3,4,14]);
 /// #     Ok(())
 /// # }
 /// ```
@@ -180,11 +180,11 @@ impl<T: num::Zero + std::cmp::PartialOrd + Copy> Number<T> {
 /// #
 /// # fn main() -> Result<(), Box<dyn Error>> {
 /// let rng: Vec<usize> = NumberRangeOptions::new()
-///              .with_list_sep('/')
+///              .with_list_sep(';')
 ///              .with_range_sep('-')
 ///              .with_group_sep(',')
 ///              .with_whitespace(true)
-///              .parse("1,200/1, 400, 230")?.collect();
+///              .parse("1,200; 1, 400, 230")?.collect();
 /// assert_eq!(rng, vec![1200, 1400230]);
 /// #     Ok(())
 /// # }
@@ -233,6 +233,32 @@ pub struct NumberRangeOptions<T> {
 /// #     Ok(())
 /// # }
 /// ```
+///
+/// You can also build it from vector/list in rust, and get the string
+/// representation for human readability
+///
+/// ```rust
+/// # use std::error::Error;
+/// # use number_range::{NumberRange,NumberRangeOptions};
+/// #
+/// # fn main() -> Result<(), Box<dyn Error>> {
+///   assert_eq!(
+///       format!("{}", NumberRange::default()
+///              .from_vec(&[1,3,4,5,6,7,8,9,10,14], None)),
+///                        "1,3:10,14");
+///   assert_eq!(
+///       format!("{}", NumberRange::from_options(
+///              NumberRangeOptions::new().with_range_sep('-')
+///              ).from_vec(&[1,3,4,5,6,7,8,9,10,14], Some(1))),
+///                        "1,3-10,14");
+///   assert_eq!(
+///       format!("{}", NumberRange::default()
+///              .from_vec(&[1,3,5,7,9,10,14], Some(2))),
+///                        "1:2:9,10,14");
+/// #     Ok(())
+/// # }
+/// ```
+///
 #[derive(Debug)]
 pub struct NumberRange<'a, T> {
     pub numbers: VecDeque<Number<T>>,
@@ -299,13 +325,23 @@ impl<'a, T: Copy + std::ops::Add<Output = T> + std::cmp::PartialOrd + num::Zero>
     }
 }
 
-impl<T: std::str::FromStr + num::One + Copy + std::str::FromStr> Default for NumberRangeOptions<T> {
+impl<
+        T: std::str::FromStr
+            + num::One
+            + Copy
+            + std::str::FromStr
+            + std::cmp::PartialOrd
+            + std::ops::Add<Output = T>,
+    > Default for NumberRangeOptions<T>
+{
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T: std::str::FromStr + num::One + Copy> NumberRangeOptions<T> {
+impl<T: std::str::FromStr + num::One + Copy + std::cmp::PartialOrd + std::ops::Add<Output = T>>
+    NumberRangeOptions<T>
+{
     /// New struct with default options
     pub fn new() -> Self {
         Self {
@@ -372,7 +408,16 @@ impl<T: std::str::FromStr + num::One + Copy> NumberRangeOptions<T> {
     }
 }
 
-impl<'a, T: num::One + std::str::FromStr + num::One + Copy> Default for NumberRange<'a, T> {
+impl<
+        'a,
+        T: num::One
+            + std::str::FromStr
+            + num::One
+            + Copy
+            + std::cmp::PartialOrd
+            + std::ops::Add<Output = T>,
+    > Default for NumberRange<'a, T>
+{
     /// It builds a NumberRange struct with
     /// [`NumberRangeOptions::new()`] options.
     fn default() -> Self {
@@ -384,7 +429,10 @@ impl<'a, T: num::One + std::str::FromStr + num::One + Copy> Default for NumberRa
     }
 }
 
-impl<'a, T: std::str::FromStr + num::One + Copy> NumberRange<'a, T>
+impl<
+        'a,
+        T: std::str::FromStr + num::One + Copy + std::cmp::PartialOrd + std::ops::Add<Output = T>,
+    > NumberRange<'a, T>
 where
     <T as std::str::FromStr>::Err: std::error::Error + Send + Sync + 'static,
 {
@@ -419,6 +467,48 @@ where
     pub fn parse_str(mut self, numstr: &'a str) -> Result<Self> {
         self.original_repr = Some(numstr);
         self.parse()
+    }
+
+    pub fn from_vec(mut self, nums: &[T], increment: Option<T>) -> Self
+    where
+        T: std::cmp::Ord,
+    {
+        self.original_repr = None;
+        let inc = increment.unwrap_or(num::one());
+        self.numbers.clear();
+        let mut nums: Vec<T> = nums.iter().map(|d| *d).collect();
+        nums.sort();
+        let nums = nums;
+        if nums.len() > 0 {
+            let mut first = &nums[0];
+            let mut prev = &nums[0];
+            let mut rng = false;
+            for current in &nums[1..] {
+                if current == prev {
+                    continue;
+                }
+                if *current == (*prev + inc) {
+                    if !rng {
+                        rng = true;
+                        first = prev;
+                    }
+                } else {
+                    if rng {
+                        self.numbers.push_back(Number::Range(*first, inc, *prev));
+                    } else {
+                        self.numbers.push_back(Number::Single(*prev));
+                    }
+                    rng = false;
+                }
+                prev = current;
+            }
+            if rng {
+                self.numbers.push_back(Number::Range(*first, inc, *prev));
+            } else {
+                self.numbers.push_back(Number::Single(*prev));
+            }
+        }
+        self
     }
 
     fn sanitize_number(&self, num: &str) -> String {
