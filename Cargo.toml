@@ -1,6 +1,6 @@
 [package]
 name = "number_range"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2021"
 description = "Library to parse list of numbers from/to human readable string"
 repository = "https://github.com/Atreyagaurav/number_range"

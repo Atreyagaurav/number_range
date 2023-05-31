@@ -244,16 +244,16 @@ pub struct NumberRangeOptions<T> {
 /// # fn main() -> Result<(), Box<dyn Error>> {
 ///   assert_eq!(
 ///       format!("{}", NumberRange::default()
-///              .from_vec(&[1,3,4,5,6,7,8,9,10,14], None)),
+///              .from_vec([1,3,4,5,6,7,8,9,10,14], None)),
 ///                        "1,3:10,14");
 ///   assert_eq!(
 ///       format!("{}", NumberRange::from_options(
 ///              NumberRangeOptions::new().with_range_sep('-')
-///              ).from_vec(&[1,3,4,5,6,7,8,9,10,14], Some(1))),
+///              ).from_vec(vec![1,3,4,5,6,7,8,9,10,14], Some(1))),
 ///                        "1,3-10,14");
 ///   assert_eq!(
 ///       format!("{}", NumberRange::default()
-///              .from_vec(&[1,3,5,7,9,10,14], Some(2))),
+///              .from_vec([1,3,5,7,9,10,14], Some(2))),
 ///                        "1:2:9,10,14");
 /// #     Ok(())
 /// # }
@@ -466,16 +466,23 @@ where
         self.parse()
     }
 
-    pub fn from_vec(mut self, nums: &[T], increment: Option<T>) -> Self
+    pub fn from_vec<V>(self, nums: V, increment: Option<T>) -> Self
+    where
+        T: std::cmp::Ord,
+        V: IntoIterator<Item = T>,
+    {
+        let mut nums: Vec<T> = nums.into_iter().collect();
+        nums.sort();
+        self.from_vec_nosort(&nums, increment)
+    }
+
+    pub fn from_vec_nosort(mut self, nums: &[T], increment: Option<T>) -> Self
     where
         T: std::cmp::Ord,
     {
         self.original_repr = None;
         let inc = increment.unwrap_or(num::one());
         self.numbers.clear();
-        let mut nums: Vec<T> = nums.iter().map(|d| *d).collect();
-        nums.sort();
-        let nums = nums;
         if nums.len() > 0 {
             let mut first = &nums[0];
             let mut prev = &nums[0];
@@ -868,5 +875,18 @@ mod tests {
         // testing to make sure it removes the old values from iterators
         let rng = NumberRange::default().parse_str("1:10").unwrap();
         assert_eq!(rng.parse_str("").unwrap().collect::<Vec<f64>>(), vec![]);
+    }
+
+    #[rstest]
+    #[case([1,2,3], None, "1:3")]
+    #[case(vec![1,2,3], None, "1:3")]
+    #[case([1,3,5,7], None, "1,3,5,7")]
+    #[case([1,3,5,7,10], Some(2), "1:2:7,10")]
+    fn rng_from_vec(
+        #[case] inp: impl IntoIterator<Item = i64>,
+        #[case] inc: Option<i64>,
+        #[case] s: &str,
+    ) {
+        assert_eq!(format!("{}", NumberRange::default().from_vec(inp, inc)), s);
     }
 }
