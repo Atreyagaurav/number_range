@@ -1,7 +1,7 @@
 # Introduction
-This is a simple library that converts the numbers range in human readable string to numeric type. For example: `"1-2"` to `[1,2]` or `"1,3:5"` to `[1,3,4,5]`.
+This is a simple library that converts the numbers range in human readable string to numeric type and vice versa. For example: convert between `"1-2"` & `[1,2]` or `"1,3:5"` & `[1,3,4,5]`.
 
-There are two separators, `list_sep` (default `,`) and `range_sep` (default `:`), the string is first separated by the list separators, and then the individual part is considered a range, there are 3 types of ranges:
+There are mainly two separators (for more types refer docs), `list_sep` (default `,`) and `range_sep` (default `:`), the string is first separated by the list separators, and then the individual part is considered a range, there are 3 types of ranges:
 
 - `number` ⇒ Single number (e.g. `3`)
 - `start:end` ⇒ Inclusive Range with step 1 (e.g. `1:10`)
@@ -40,6 +40,14 @@ let rng: Vec<usize> = NumberRangeOptions::new()
              .with_whitespace(true)
              .parse("1,200/1, 400, 230")?.collect();
 assert_eq!(rng, vec![1200, 1400230]);
+```
+
+From Rust `List` or `Vec`:
+```rust
+assert_eq!(
+    format!("{}", NumberRange::default()
+           .from_vec(&[1,3,4,5,6,7,8,9,10,14], None)),
+                     "1,3:10,14");
 ```
 
 # Links

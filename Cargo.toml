@@ -1,8 +1,8 @@
 [package]
 name = "number_range"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
-description = "Library to parse list of numbers from human readable string"
+description = "Library to parse list of numbers from/to human readable string"
 repository = "https://github.com/Atreyagaurav/number_range"
 license = "GPL-3.0-only"
 readme = "README.md"
